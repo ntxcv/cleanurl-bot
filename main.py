@@ -1,7 +1,7 @@
 import os
 import logging
 import asyncio
-from urllib.parse import urlparse, parse_qs, unquote
+from urllib.parse import urlparse, parse_qs, unquote, urlunparse
 
 from dotenv import load_dotenv
 from telegram import Update
@@ -20,18 +20,50 @@ BOT_TOKEN = os.getenv("BOT_TOKEN")
 # Логгирование
 logging.basicConfig(level=logging.INFO)
 
-# 📤 Декодирование ссылки из параметра ?u=
-def extract_and_decode_url(input_url: str) -> str | None:
+# 📤 Декодирование ссылки из параметра ?u= и очистка от трекеров
+def clean_url(input_url: str) -> str | None:
+    # Извлекаем URL из параметра u= если это ссылка l.instagram.com
+    if "l.instagram.com" in input_url and "?u=" in input_url:
+        parsed = urlparse(input_url)
+        query = parse_qs(parsed.query)
+        encoded_url = query.get('u', [None])[0]
+        if not encoded_url:
+            return None
+        input_url = unquote(encoded_url)
+    
+    # Очищаем URL от параметров-трекеров
     parsed = urlparse(input_url)
-    query = parse_qs(parsed.query)
-    encoded_url = query.get('u', [None])[0]
-    return unquote(encoded_url) if encoded_url else None
+    query_params = parse_qs(parsed.query)
+    
+    # Список параметров, которые нужно удалить
+    trackers = ['fbclid', 'utm_source', 'utm_medium', 'utm_campaign', 
+                'utm_term', 'utm_content', 'gclid', 'yclid', '_openstat']
+    
+    # Удаляем параметры-трекеры
+    for tracker in trackers:
+        query_params.pop(tracker, None)
+    
+    # Собираем URL обратно
+    cleaned_query = '&'.join(
+        f"{k}={v[0]}" for k, v in query_params.items()
+    ) if query_params else ''
+    
+    cleaned_url = urlunparse((
+        parsed.scheme,
+        parsed.netloc,
+        parsed.path,
+        parsed.params,
+        cleaned_query,
+        parsed.fragment
+    ))
+    
+    return cleaned_url
 
 # 🚀 Команда /start
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
         "👋 Отправь мне ссылку из сети на букву I с параметром `?u=...`, и я верну чистую ссылку.\n\n"
-        "Пример:\nhttps://l.isocialnayaset.com/?u=https%3A%2F%2Fexample.com..."
+        "Пример:\nhttps://l.instagram.com/?u=https%3A%2F%2Fexample.com..."
     )
 
 # 📩 Обработка входящих сообщений
@@ -41,24 +73,23 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     message_id = user_message.message_id
     text = user_message.text
 
-    # Проверка и обработка ссылки
-    if "l.instagram.com" in text and "?u=" in text:
-        decoded_url = extract_and_decode_url(text)
-        if decoded_url:
+    if text and ("l.instagram.com" in text or "?u=" in text or "?fbclid=" in text):
+        cleaned_url = clean_url(text)
+        if cleaned_url:
             # 📤 Отправляем форматированный ответ с превью
-            response = f"Вот чистая ссылка 🔗:\n{decoded_url}"
+            response = f"Вот чистая ссылка 🔗:\n{cleaned_url}"
             await user_message.chat.send_message(response, disable_web_page_preview=False)
 
-            # 🧹 Удаляем сообщение пользователя через 5 секунд
+            # 🧹 Удаляем сообщение пользователя через 0.3 секунды
             await asyncio.sleep(0.3)
             try:
                 await context.bot.delete_message(chat_id=chat_id, message_id=message_id)
             except Exception as e:
                 logging.warning(f"Не удалось удалить сообщение пользователя: {e}")
         else:
-            await user_message.reply_text("❌ Не удалось декодировать ссылку.")
+            await user_message.reply_text("❌ Не удалось обработать ссылку.")
     else:
-        await user_message.reply_text("❌ Пожалуйста, отправь ссылку вида:\nhttps://l.isocialnayaset.com/?u=...")
+        await user_message.reply_text("❌ Пожалуйста, отправь ссылку вида:\nhttps://l.instagram.com/?u=...")
 
 # ▶️ Запуск бота
 if __name__ == '__main__':
