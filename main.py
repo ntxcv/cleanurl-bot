@@ -18,14 +18,13 @@ from telegram.ext import (
 load_dotenv()
 BOT_TOKEN = os.getenv("BOT_TOKEN")
 
-# Логгирование
+# Настройка логирования
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
 )
 logger = logging.getLogger(__name__)
 
-# 📤 Декодирование ссылки из параметра ?u= и очистка от трекеров
 def clean_url(input_url: str) -> str | None:
     try:
         # Извлекаем URL из параметра u= если это ссылка l.instagram.com
@@ -37,19 +36,16 @@ def clean_url(input_url: str) -> str | None:
                 return None
             input_url = unquote(encoded_url)
         
-        # Очищаем URL от параметров-трекеров
+        # Очищаем URL от трекеров
         parsed = urlparse(input_url)
         query_params = parse_qs(parsed.query)
         
-        # Список параметров, которые нужно удалить
         trackers = ['fbclid', 'utm_source', 'utm_medium', 'utm_campaign', 
-                    'utm_term', 'utm_content', 'gclid', 'yclid', '_openstat']
+                   'utm_term', 'utm_content', 'gclid', 'yclid', '_openstat']
         
-        # Удаляем параметры-трекеры
         for tracker in trackers:
             query_params.pop(tracker, None)
         
-        # Собираем URL обратно
         cleaned_query = '&'.join(
             f"{k}={v[0]}" for k, v in query_params.items()
         ) if query_params else ''
@@ -63,65 +59,64 @@ def clean_url(input_url: str) -> str | None:
             parsed.fragment
         ))
     except Exception as e:
-        logger.error(f"Ошибка при обработке URL: {e}")
+        logger.error(f"URL processing error: {e}")
         return None
 
-# 🚀 Команда /start
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
-        "👋 Отправь мне ссылку из Instagram с параметром `?u=...` или любую ссылку с трекерами, "
-        "и я верну чистую ссылку.\n\n"
-        "Пример:\nhttps://l.instagram.com/?u=https%3A%2F%2Fexample.com..."
+        "👋 Отправьте мне ссылку для очистки от трекеров.\n"
+        "Пример:\nhttps://l.instagram.com/?u=..."
     )
 
-# 📩 Обработка входящих сообщений
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     try:
-        user_message = update.message
-        if not user_message or not user_message.text:
+        if not update.message or not update.message.text:
             return
 
-        text = user_message.text
-        logger.info(f"Получено сообщение: {text}")
+        text = update.message.text
+        logger.info(f"Received: {text}")
 
         if any(x in text for x in ["l.instagram.com", "?u=", "?fbclid="]):
             cleaned_url = clean_url(text)
             if cleaned_url:
-                response = f"Вот чистая ссылка 🔗:\n{cleaned_url}"
-                sent_message = await user_message.reply_text(response, disable_web_page_preview=False)
-                
-                # Удаляем сообщение пользователя через 0.3 секунды
+                await update.message.reply_text(
+                    f"🔗 Очищенная ссылка:\n{cleaned_url}",
+                    disable_web_page_preview=False
+                )
                 await asyncio.sleep(0.3)
                 try:
-                    await user_message.delete()
+                    await update.message.delete()
                 except Exception as e:
-                    logger.warning(f"Не удалось удалить сообщение: {e}")
+                    logger.warning(f"Delete failed: {e}")
             else:
-                await user_message.reply_text("❌ Не удалось обработать ссылку.")
+                await update.message.reply_text("❌ Не удалось обработать ссылку")
         else:
-            await user_message.reply_text("❌ Пожалуйста, отправьте ссылку для очистки.")
+            await update.message.reply_text("❌ Отправьте ссылку для очистки")
     except Exception as e:
-        logger.error(f"Ошибка в handle_message: {e}")
+        logger.error(f"Message handling error: {e}")
 
-# ▶️ Запуск бота с обработкой ошибок
-async def main():
+def main():
     try:
+        # Создаем новый event loop для Render
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        
         application = Application.builder().token(BOT_TOKEN).build()
-
+        
         application.add_handler(CommandHandler("start", start))
         application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
-
-        logger.info("Бот запускается...")
-        await application.run_polling(drop_pending_updates=True)
+        
+        logger.info("Starting bot...")
+        application.run_polling(
+            drop_pending_updates=True,
+            close_loop=False  # Важно для Render
+        )
     except Conflict:
-        logger.error("Бот уже запущен в другом процессе. Остановка.")
+        logger.error("Bot is already running elsewhere")
     except Exception as e:
-        logger.error(f"Ошибка при запуске бота: {e}")
+        logger.error(f"Fatal error: {e}")
+    finally:
+        logger.info("Bot stopped")
 
 if __name__ == '__main__':
-    try:
-        asyncio.run(main())
-    except KeyboardInterrupt:
-        logger.info("Бот остановлен пользователем")
-    except Exception as e:
-        logger.error(f"Фатальная ошибка: {e}")
+    main()
