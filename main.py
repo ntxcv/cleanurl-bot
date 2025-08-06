@@ -6,7 +6,7 @@ from urllib.parse import urlparse, parse_qs, unquote
 from dotenv import load_dotenv
 from telegram import Update
 from telegram.ext import (
-    ApplicationBuilder,
+    Application,
     CommandHandler,
     MessageHandler,
     ContextTypes,
@@ -30,8 +30,8 @@ def extract_and_decode_url(input_url: str) -> str | None:
 # 🚀 Команда /start
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
-        "👋 Отправь мне ссылку из соцсети I с параметром `?u=...`, и я верну чистую ссылку.\n\n"
-        "Пример:\nhttps://l.isocialnetwork.com/?u=https%3A%2F%2Fexample.com..."
+        "👋 Отправь мне ссылку из сети на букву I с параметром `?u=...`, и я верну чистую ссылку.\n\n"
+        "Пример:\nhttps://l.isocialnayaset.com/?u=https%3A%2F%2Fexample.com..."
     )
 
 # 📩 Обработка входящих сообщений
@@ -41,13 +41,15 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     message_id = user_message.message_id
     text = user_message.text
 
-    if "?u=" in text:
+    # Проверка и обработка ссылки
+    if "l.instagram.com" in text and "?u=" in text:
         decoded_url = extract_and_decode_url(text)
         if decoded_url:
+            # 📤 Отправляем форматированный ответ с превью
             response = f"Вот чистая ссылка 🔗:\n{decoded_url}"
-            await context.bot.send_message(chat_id=chat_id, text=response, disable_web_page_preview=False)
+            await user_message.chat.send_message(response, disable_web_page_preview=False)
 
-            # 🧹 Пытаемся "удалить" сообщение (если включено автоудаление — оно красиво исчезнет)
+            # 🧹 Удаляем сообщение пользователя через 5 секунд
             await asyncio.sleep(0.3)
             try:
                 await context.bot.delete_message(chat_id=chat_id, message_id=message_id)
@@ -56,14 +58,14 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         else:
             await user_message.reply_text("❌ Не удалось декодировать ссылку.")
     else:
-        await user_message.reply_text("❌ Пожалуйста, отправь ссылку вида:\nhttps://l.isocialnetwork.com/?u=...")
+        await user_message.reply_text("❌ Пожалуйста, отправь ссылку вида:\nhttps://l.isocialnayaset.com/?u=...")
 
 # ▶️ Запуск бота
 if __name__ == '__main__':
-    app = ApplicationBuilder().token(BOT_TOKEN).build()
+    application = Application.builder().token(BOT_TOKEN).build()
 
-    app.add_handler(CommandHandler("start", start))
-    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
+    application.add_handler(CommandHandler("start", start))
+    application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
 
     print("Бот запущен...")
-    app.run_polling()
+    application.run_polling()
