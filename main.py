@@ -80,7 +80,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             cleaned_url = clean_url(text)
             if cleaned_url:
                 await update.message.reply_text(
-                    f"🔗 Очищенная ссылка:\n{cleaned_url}",
+                    f"🔗 Очищенная ссылка:\n\n{cleaned_url}",
                     disable_web_page_preview=False
                 )
                 await asyncio.sleep(0.3)
