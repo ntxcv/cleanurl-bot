@@ -4,7 +4,7 @@ import asyncio
 from urllib.parse import urlparse, parse_qs, unquote, urlunparse
 
 from dotenv import load_dotenv
-from telegram import Update
+from telegram import Update, ReplyKeyboardMarkup, ReplyKeyboardRemove
 from telegram.error import Conflict
 from telegram.ext import (
     Application,
@@ -63,9 +63,14 @@ def clean_url(input_url: str) -> str | None:
         return None
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    # Создаем клавиатуру с одной кнопкой
+    reply_keyboard = [["Вставить ссылку"]]
+    markup = ReplyKeyboardMarkup(reply_keyboard, resize_keyboard=True)
+    
     await update.message.reply_text(
-         "👋 Отправь мне ссылку из сети на букву I с параметром `?u=...`, и я верну чистую ссылку.\n\n"
-        "Пример:\nhttps://l.isocialnetwork.com/?u=..."
+        "👋 Отправь мне ссылку из сети на букву I с параметром `?u=...`, и я верну чистую ссылку.\n\n"
+        "Пример:\nhttps://l.isocialnetwork.com/?u=...",
+        reply_markup=markup
     )
 
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -76,12 +81,25 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         text = update.message.text
         logger.info(f"Received: {text}")
 
+        # Если пользователь нажал "Вставить ссылку", просим отправить ссылку
+        if text == "Вставить ссылку":
+            await update.message.reply_text(
+                "📎 Вставьте ссылку для очистки:",
+                reply_markup=ReplyKeyboardRemove()
+            )
+            return
+
         if any(x in text for x in ["l.instagram.com", "?u=", "?fbclid="]):
             cleaned_url = clean_url(text)
             if cleaned_url:
+                # Возвращаем клавиатуру после обработки ссылки
+                reply_keyboard = [["Вставить ссылку"]]
+                markup = ReplyKeyboardMarkup(reply_keyboard, resize_keyboard=True)
+                
                 await update.message.reply_text(
                     f"🔗 Очищенная ссылка:\n\n{cleaned_url}",
-                    disable_web_page_preview=False
+                    disable_web_page_preview=False,
+                    reply_markup=markup
                 )
                 await asyncio.sleep(0.3)
                 try:
