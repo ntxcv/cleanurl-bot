@@ -64,8 +64,8 @@ def clean_url(input_url: str) -> str | None:
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
-        "👋 Отправьте мне ссылку для очистки от трекеров.\n"
-        "Пример:\nhttps://l.instagram.com/?u=..."
+         "👋 Отправь мне ссылку из сети на букву I с параметром `?u=...`, и я верну чистую ссылку.\n\n"
+        "Пример:\nhttps://l.isocialnetwork.com/?u=..."
     )
 
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
